@@ -16,12 +16,13 @@ Nimiq Watchdog is a Python application designed to monitor the status of a Nimiq
 git clone https://github.com/maestroi/nimiq-watchdog.git
 cd nimiq-watchdog
 ```
-2 Install the required Python packages:
+2. Install the required Python packages:
     
 ```bash
 pip install -r requirements.txt
 ```
 
+3. Run the application using the following command:
 ```bash
 python main.py
 ```
