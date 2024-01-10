@@ -1,5 +1,7 @@
 # Nimiq Watchdog
 
+[![Docker Image CI](https://github.com/maestroi/nimiq-watchdog/actions/workflows/docker-image.yml/badge.svg)](https://github.com/maestroi/nimiq-watchdog/actions/workflows/docker-image.yml)
+
 Nimiq Watchdog is a Python application designed to monitor the status of a Nimiq node. If the node fails to establish consensus after a certain number of attempts, the application will automatically restart the node.
 
 ## Requirements
