@@ -178,3 +178,4 @@ if __name__ == "__main__":
     logging.info(f"Connecting to Nimiq node at: {NIMIQ_HOST}:{NIMIQ_PORT}")
     while True:
         main()
+        time.sleep(1) # Don't want to go too fast
