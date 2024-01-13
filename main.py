@@ -154,6 +154,7 @@ def main():
                     currentEpoch()
                     currentBatch()
                     prom_current_health.set(1)
+                    time.sleep(1) # Don't want to go too fast
                     break
                 else:
                     logging.error(f"Consensus not established: Attempt {attempt + 1}")
