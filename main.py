@@ -22,7 +22,7 @@ prom_current_epoch = Gauge('nimiq_watchdog_current_epoch', 'current epoch number
 prom_current_batch = Gauge('nimiq_watchdog_current_batch', 'current batch number')
 prom_container_restarts = Counter('nimiq_watchdog_container_restarts', 'Number of Docker container restarts')
 
-RETRY_LIMIT = int(os.getenv('RETRY_LIMIT', 1))
+RETRY_LIMIT = int(os.getenv('RETRY_LIMIT', 30))
 RETRY_DELAY = int(os.getenv('RETRY_DELAY', 2))  # in seconds
 RESTART_DELAY = int(os.getenv('RESTART_DELAY', 300))  # in seconds
 DOCKER_CONTAINER_NAME = os.getenv('DOCKER_CONTAINER_NAME', 'node')
@@ -62,6 +62,32 @@ def isConsensusEstablished():
         if response.status_code == 200:
             resp_data = json.loads(response.text)
             return resp_data.get('result')
+        else:
+            logging.error(f"Error fetching consensus: HTTP {response.status_code}")
+            return None
+    except Exception as e:
+        logging.error(f"Failed to fetch fetching consensus for: {e}")
+        return None
+
+def getBlockHeight():
+    """
+    This function retrieves consensus data data from a Nimiq node using JSON-RPC.
+    If the request fails, it returns None.
+    """
+    url = f"{NIMIQ_HOST}:{NIMIQ_PORT}"
+    data = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "getBlockNumber",
+        "params": []
+    }
+    headers = {'Content-Type': 'application/json'}
+
+    try:
+        response = requests.post(url, json=data, headers=headers, timeout=5)
+        if response.status_code == 200:
+            resp_data = json.loads(response.text)
+            return resp_data.get('result', {}).get('data')
         else:
             logging.error(f"Error fetching consensus: HTTP {response.status_code}")
             return None
@@ -145,38 +171,44 @@ def main():
             time.sleep(RETRY_DELAY)
 
     logging.info("Starting continuous monitoring...")
+    last_block_height = None
+    failed_attempts = 0
     while True:
-        for attempt in range(RETRY_LIMIT):
-            try:
-                consensus = isConsensusEstablished()
-                if consensus is not None and consensus:
-                    # If consensus is established, break the loop
-                    currentEpoch()
-                    currentBatch()
-                    prom_current_health.set(1)
-                    time.sleep(1) # Don't want to go too fast
-                    break
+        try:
+            current_block_height = getBlockHeight()
+            if current_block_height is None or current_block_height == last_block_height:
+                failed_attempts += 1
+                prom_current_health.set(0)
+                if current_block_height is None:
+                    logging.error(f"Failed to get current block height: Attempt {failed_attempts}")
                 else:
-                    logging.error(f"Consensus not established: Attempt {attempt + 1}")
-                    prom_current_health.set(0)
-                    time.sleep(RETRY_DELAY)
-            except Exception as e:
-                logging.error(f"Failed to get consensus: {e}")
+                    logging.error(f"Block height has not changed: Attempt {failed_attempts}")
                 time.sleep(RETRY_DELAY)
+            else:
+                logging.info(f"Block height has changed: {last_block_height} -> {current_block_height}")
+                last_block_height = current_block_height
+                failed_attempts = 0
+                prom_current_health.set(1)
+                currentEpoch()
+                currentBatch()
+                time.sleep(RETRY_DELAY) # Don't want to go too fast  
+                       
+        except Exception as e:
+            logging.error(f"Failed to get blockheight: {e}")
+            time.sleep(RETRY_DELAY)
 
-        # If we've reached this point, all attempts have failed
-        if attempt == RETRY_LIMIT - 1:
-            logging.error(f"Failed to establish consensus after {RETRY_LIMIT} attempts, restarting Docker container...")
+        if failed_attempts == RETRY_LIMIT:
+            logging.error(f"We are stuck on {last_block_height} we tried {RETRY_LIMIT}, restarting Docker container...")
             restart_docker_container(DOCKER_CONTAINER_NAME)
             logging.info("Sleeping for 5 minutes after restart...")
             time.sleep(RESTART_DELAY)  # Sleep for 5 minutes
+            failed_attempts = 0  # Reset the counter
 
 if __name__ == "__main__":
     logging.info("Starting Nimiq watchdog...")
-    logging.info(f"Version: 0.1.0 ")
+    logging.info(f"Version: 0.2.0 ")
     start_http_server(int(PROMETHEUS_PORT))
     logging.info(f"Prometheus metrics available at: http://localhost:{PROMETHEUS_PORT}/metrics")
     logging.info(f"Connecting to Nimiq node at: {NIMIQ_HOST}:{NIMIQ_PORT}")
     while True:
         main()
-        time.sleep(1) # Don't want to go too fast
