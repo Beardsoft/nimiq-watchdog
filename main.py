@@ -4,6 +4,7 @@ import json
 import logging
 import requests
 import docker
+import shutil
 from prometheus_client import start_http_server, Gauge, Counter
 
 logging.basicConfig(level=logging.INFO,
@@ -26,6 +27,9 @@ RETRY_LIMIT = int(os.getenv('RETRY_LIMIT', 30))
 RETRY_DELAY = int(os.getenv('RETRY_DELAY', 2))  # in seconds
 RESTART_DELAY = int(os.getenv('RESTART_DELAY', 300))  # in seconds
 DOCKER_CONTAINER_NAME = os.getenv('DOCKER_CONTAINER_NAME', 'node')
+CLEAN_LEDGER = os.getenv('CLEAN_LEDGER', False)
+LEDGER_DIR = os.getenv('LEDGER_DIR', '/var/lib/docker/volumes/validator_data/_data/')
+NODE_TYPE = os.getenv('NODE_TYPE', 'full')  # Default to 'full' if NODE_TYPE is not set
 
 client = docker.from_env()
 
@@ -33,6 +37,18 @@ def restart_docker_container(container_name):
     """
     This function restarts a Docker container.
     """
+    
+    if CLEAN_LEDGER and NODE_TYPE == 'full':
+        ledger_dir = os.path.join(LEDGER_DIR, 'testalbatross-full-consensus')
+        if os.path.exists(ledger_dir):
+            shutil.rmtree(ledger_dir)
+            logging.info(f"Removed ledger directory: {ledger_dir}")
+        else:
+            logging.error(f"No such directory: {ledger_dir}")
+    elif NODE_TYPE not in ['full', 'archive']:
+        logging.error(f"Unknown node type: {NODE_TYPE}")
+        return
+
     try:
         container = client.containers.get(container_name)
         container.restart()
@@ -42,7 +58,7 @@ def restart_docker_container(container_name):
         logging.error(f"No such container: {container_name}")
     except docker.errors.APIError as e:
         logging.error(f"Failed to restart Docker container: {container_name}: {e}")
-
+        
 def isConsensusEstablished():
     """
     This function retrieves consensus data data from a Nimiq node using JSON-RPC.
@@ -201,7 +217,7 @@ def main():
             logging.error(f"We are stuck on {last_block_height} we tried {RETRY_LIMIT}, restarting Docker container...")
             restart_docker_container(DOCKER_CONTAINER_NAME)
             logging.info("Sleeping for 5 minutes after restart...")
-            time.sleep(RESTART_DELAY)  # Sleep for 5 minutes
+            time.sleep(RESTART_DELAY)
             failed_attempts = 0  # Reset the counter
 
 if __name__ == "__main__":
@@ -210,5 +226,8 @@ if __name__ == "__main__":
     start_http_server(int(PROMETHEUS_PORT))
     logging.info(f"Prometheus metrics available at: http://localhost:{PROMETHEUS_PORT}/metrics")
     logging.info(f"Connecting to Nimiq node at: {NIMIQ_HOST}:{NIMIQ_PORT}")
+    logging.info(f"This is a {NODE_TYPE} Node type")
+    logging.info(f'Clean ledger is {CLEAN_LEDGER} and deletes ledger in {LEDGER_DIR}')
+    logging.info(30 * "-")
     while True:
         main()

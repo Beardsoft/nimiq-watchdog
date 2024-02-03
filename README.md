@@ -70,6 +70,7 @@ export DOCKER_CONTAINER_NAME=your_container_name
 export RETRY_LIMIT=10
 export RETRY_DELAY=10
 export PROMETHEUS_PORT=12345
+export CLEAN_LEDGER=True
 ```
 
 Start the application using the following command:
