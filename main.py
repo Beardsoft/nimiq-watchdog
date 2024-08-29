@@ -1,11 +1,12 @@
-import os
-import time
 import json
 import logging
-import requests
-import docker
+import os
 import shutil
-from prometheus_client import start_http_server, Gauge, Counter
+import time
+
+import docker
+import requests
+from prometheus_client import Counter, Gauge, start_http_server
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s — %(message)s',
@@ -222,7 +223,7 @@ def main():
 
 if __name__ == "__main__":
     logging.info("Starting Nimiq watchdog...")
-    logging.info(f"Version: 0.2.0 ")
+    logging.info(f"Version: 0.3.0 ")
     start_http_server(int(PROMETHEUS_PORT))
     logging.info(f"Prometheus metrics available at: http://localhost:{PROMETHEUS_PORT}/metrics")
     logging.info(f"Connecting to Nimiq node at: {NIMIQ_HOST}:{NIMIQ_PORT}")
